@@ -6,6 +6,13 @@ local MOVE    = "MOVE"
 local ACTIVE  = "ACTIVE"
 local RELEASE = "RELEASE"
 
+-- Resolve gred_emp_base explicitly once, never via self.BaseClass
+-- (self.BaseClass from a child entity resolves to THIS table, causing infinite recursion)
+local function GredBase()
+    local reg = scripted_ents.GetStored("gred_emp_base")
+    return reg and (reg.t or reg)
+end
+
 function ENT:ShooterStillValid(ply, botmode)
     if not IsValid(ply) then return false end
     if ply == self then return botmode end
@@ -65,7 +72,10 @@ function ENT:FindBotTarget(botmode, target, ct)
 end
 
 function ENT:Initialize()
-    self.BaseClass.Initialize(self)
+    -- Call gred_emp_base:Initialize directly by name — NOT self.BaseClass (recurses)
+    local base = GredBase()
+    if base and base.Initialize then base.Initialize(self) end
+
     self._npcState      = SCAN
     self._npcGunner     = NULL
     self._nextScanTime  = 0
@@ -90,7 +100,9 @@ function ENT:FindGunner()
 end
 
 function ENT:Think()
-    self.BaseClass.Think(self)
+    -- Call gred_emp_base:Think directly — NOT self.BaseClass (recurses)
+    local base = GredBase()
+    if base and base.Think then base.Think(self) end
 
     local ct = CurTime()
     if ct < self._nextThinkTime then return end
@@ -176,5 +188,6 @@ function ENT:OnRemove()
     local npc = self._npcGunner
     if IsValid(npc) then npc._gredActiveEmplacement = nil end
     if self:GetShooter() == self then self:SetShooter(nil) end
-    self.BaseClass.OnRemove(self)
+    local base = GredBase()
+    if base and base.OnRemove then base.OnRemove(self) end
 end
