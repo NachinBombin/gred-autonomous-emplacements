@@ -1,6 +1,7 @@
 AddCSLuaFile()
-ENT.Base           = "gred_emp_nebelwerfer"
-ENT.PrintName      = "Nebelwerfer (Auto)"
-ENT.Category       = "Autonomous Emplacements"
-ENT.Spawnable      = true
+ENT.Base          = "gred_emp_auto_base"
+ENT.PrintName     = "Nebelwerfer (Auto)"
+ENT.Category      = "Autonomous Emplacements"
+ENT.IconOverride  = "entities/gred_emp_nebelwerfer.png"
+ENT.Spawnable     = true
 ENT.AdminSpawnable = false
