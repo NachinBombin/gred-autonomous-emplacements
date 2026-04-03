@@ -5,48 +5,42 @@ local GHOST_MODEL    = "models/combine_soldier.mdl"
 local SCAN_RADIUS    = 2000
 local ATTACK_PLAYERS = true
 
-local function GetEntTable(ent)
-    -- GMod entities are userdata; their custom fields live in :GetTable()
+-- Safe field access: only scripted entities have a Lua backing table
+local function EntGet(ent, key)
     if not IsValid(ent) then return nil end
-    return ent:GetTable()
-end
-
-local function EmpGet(ent, key)
-    local t = GetEntTable(ent)
+    local stored = scripted_ents.GetStored(ent:GetClass())
+    if not stored then return nil end
+    local t = ent:GetTable()
     return t and t[key]
 end
 
-local function EmpSet(ent, key, val)
-    local t = GetEntTable(ent)
+local function EntSet(ent, key, val)
+    if not IsValid(ent) then return end
+    local stored = scripted_ents.GetStored(ent:GetClass())
+    if not stored then return end
+    local t = ent:GetTable()
     if t then t[key] = val end
 end
 
 local function IsGredEmp(ent)
     if not IsValid(ent) then return false end
-    local stored = scripted_ents.GetStored(ent:GetClass())
-    if not stored then return false end
-    local base = stored.t
-    while base do
-        if base.IsGredWitchEmplacement then return true end
-        local bn = scripted_ents.GetStored(base.Base or "")
-        if not bn then break end
-        base = bn.t
-    end
-    return string.sub(ent:GetClass(), 1, 8) == "gred_emp"
+    -- Fast path: class prefix check first (cheap)
+    if string.sub(ent:GetClass(), 1, 8) ~= "gred_emp" then return false end
+    return true
 end
 
 local function SpawnGhost(emp)
     if not IsValid(emp) then return end
-    if IsValid(EmpGet(emp, "_gredAutoGhost")) then return end
+    if IsValid(EntGet(emp, "_gredAutoGhost")) then return end
 
     local ghost = ents.Create("npc_combine_s")
     if not IsValid(ghost) then
-        MsgC(Color(255,150,50), "[GredAuto] Failed to create ghost NPC for ", emp:GetClass(), "\n")
+        MsgC(Color(255,150,50), "[GredAuto] Failed to create ghost NPC\n")
         return
     end
 
     ghost:SetModel(GHOST_MODEL)
-    ghost:SetPos(emp:GetPos() + Vector(0, 0, -2000))
+    ghost:SetPos(emp:GetPos() + Vector(0, 0, -4096))
     ghost:SetAngles(emp:GetAngles())
     ghost:SetKeyValue("squadname", "gredauto_ghost")
     ghost:SetKeyValue("spawnflags", "512")
@@ -57,12 +51,12 @@ local function SpawnGhost(emp)
     ghost:SetNotSolid(true)
     ghost:SetCollisionGroup(COLLISION_GROUP_NONE)
     ghost:SetMoveType(MOVETYPE_NONE)
-    ghost:SetPos(emp:GetPos() + Vector(0, 0, -2000))
+    ghost:SetPos(emp:GetPos() + Vector(0, 0, -4096))
 
     local phys = ghost:GetPhysicsObject()
     if IsValid(phys) then phys:EnableMotion(false) end
 
-    -- Store flags on the entity's Lua table, not via rawget on userdata
+    -- NPC entities always have a GetTable() since they are SENT-backed in GMod
     local gt = ghost:GetTable()
     gt._gredAutoGhost    = true
     gt._gredFakeAttack   = false
@@ -76,16 +70,14 @@ local function SpawnGhost(emp)
     et._gredAutoGhost     = ghost
     et._gredScanRadius    = SCAN_RADIUS
     et._gredAttackPlayers = ATTACK_PLAYERS
+    et.Owner              = ghost
+    et.ShouldSetAngles    = true
 
     emp:SetBotMode(false)
     emp:SetShooter(ghost)
-    et.Owner           = ghost
-    gt.ActiveEmplacement = emp
-
     emp:SetBotMode(true)
-    et.ShouldSetAngles = true
 
-    MsgC(Color(100,200,255), "[GredAuto] Ghost spawned for ", emp:GetClass(), " (", tostring(emp:EntIndex()), ")\n")
+    MsgC(Color(100,200,255), "[GredAuto] Ghost ready: ", emp:GetClass(), "\n")
 end
 
 hook.Add("OnEntityCreated", "gredauto_emplacement_init", function(ent)
@@ -93,23 +85,30 @@ hook.Add("OnEntityCreated", "gredauto_emplacement_init", function(ent)
     timer.Simple(0, function()
         if not IsValid(ent) then return end
         if not IsGredEmp(ent) then return end
-        if EmpGet(ent, "_gredAutoGhost") then return end
+        if IsValid(EntGet(emp, "_gredAutoGhost")) then return end
         SpawnGhost(ent)
     end)
 end)
 
 hook.Add("EntityRemoved", "gredauto_ghost_cleanup", function(ent)
+    -- MUST guard: EntityRemoved fires for ALL entities (brushes, world, etc.)
+    -- Only scripted emplacements and NPCs have our custom fields
     if not IsValid(ent) then return end
-    -- ent is userdata; get its Lua table safely
-    local t = ent:GetTable()
-    if not t then return end
+    local class = ent:GetClass()
 
-    local ghost = t._gredAutoGhost
-    if ghost and IsValid(ghost) then
-        ghost:Remove()
+    -- Case 1: a gred emplacement was removed -> kill its ghost
+    if string.sub(class, 1, 8) == "gred_emp" then
+        local t = ent:GetTable()
+        if not t then return end
+        local ghost = t._gredAutoGhost
+        if IsValid(ghost) then ghost:Remove() end
+        return
     end
 
-    if t._gredAutoGhost then
+    -- Case 2: our ghost NPC was removed -> clean up emplacement ref
+    if class == "npc_combine_s" then
+        local t = ent:GetTable()
+        if not t or not t._gredAutoGhost then return end
         local emp = t._gredEmp
         if IsValid(emp) then
             local et = emp:GetTable()
@@ -124,6 +123,7 @@ end)
 
 hook.Add("OnNPCKilled", "gredauto_ghost_respawn", function(npc)
     if not IsValid(npc) then return end
+    if npc:GetClass() ~= "npc_combine_s" then return end
     local t = npc:GetTable()
     if not t or not t._gredAutoGhost then return end
     local emp = t._gredEmp

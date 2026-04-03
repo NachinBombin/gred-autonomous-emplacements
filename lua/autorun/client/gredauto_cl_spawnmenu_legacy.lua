@@ -1,10 +1,7 @@
 -- gredauto_cl_spawnmenu_legacy.lua
--- Spawnmenu tab using ContentIcon buttons inside a DScrollPanel.
--- Does NOT use ContentSidebar:AddCategory (that method does not exist in GMod).
 if not CLIENT then return end
 
 local ENTRIES = {
-    -- Machine Guns
     { class="gred_emp_bar",            name="BAR",               cat="Machine Guns" },
     { class="gred_emp_bren",           name="Bren",              cat="Machine Guns" },
     { class="gred_emp_dshk",           name="DShK",              cat="Machine Guns" },
@@ -27,7 +24,6 @@ local ENTRIES = {
     { class="gred_emp_mg81z",          name="MG 81Z",            cat="Machine Guns" },
     { class="gred_emp_rpk",            name="RPK",               cat="Machine Guns" },
     { class="gred_emp_vickers",        name="Vickers",           cat="Machine Guns" },
-    -- AA
     { class="gred_emp_2a65",           name="2A65",              cat="Anti-Aircraft" },
     { class="gred_emp_artemis30",      name="Artemis 30mm",      cat="Anti-Aircraft" },
     { class="gred_emp_bofors",         name="Bofors 40mm",       cat="Anti-Aircraft" },
@@ -44,7 +40,6 @@ local ENTRIES = {
     { class="gred_emp_zpu4_1931",      name="ZPU-4 (1931)",      cat="Anti-Aircraft" },
     { class="gred_emp_zpu4_1949",      name="ZPU-4 (1949)",      cat="Anti-Aircraft" },
     { class="gred_emp_zsu23",          name="ZSU-23",            cat="Anti-Aircraft" },
-    -- AT Cannons
     { class="gred_emp_6pdr",           name="QF 6-Pdr",          cat="Anti-Tank" },
     { class="gred_emp_kwk",            name="KwK 40",            cat="Anti-Tank" },
     { class="gred_emp_pak38",          name="PaK 38",            cat="Anti-Tank" },
@@ -52,7 +47,6 @@ local ENTRIES = {
     { class="gred_emp_pak43",          name="PaK 43",            cat="Anti-Tank" },
     { class="gred_emp_zis2",           name="ZiS-2",             cat="Anti-Tank" },
     { class="gred_emp_zis3",           name="ZiS-3",             cat="Anti-Tank" },
-    -- Artillery
     { class="gred_emp_3inchmortar",    name="3-inch Mortar",     cat="Artillery" },
     { class="gred_emp_gpf155",         name="GPF 155mm",         cat="Artillery" },
     { class="gred_emp_grw34",          name="GrW 34 Mortar",     cat="Artillery" },
@@ -72,12 +66,9 @@ local function GetIcon(class)
     return (not mat:IsError()) and path or FALLBACK
 end
 
-spawnmenu.AddCreationTab("Auto Emplacements", function()
-    -- Root scroll container
-    local scroll = vgui.Create("DScrollPanel")
-    scroll:Dock(FILL)
+local function BuildPanel()
+    local pnl = vgui.Create("SpawnmenuContentPanel")
 
-    -- Group entries by category in order
     local catMap = {}
     for _, e in ipairs(ENTRIES) do
         catMap[e.cat] = catMap[e.cat] or {}
@@ -88,52 +79,31 @@ spawnmenu.AddCreationTab("Auto Emplacements", function()
         local entries = catMap[catName]
         if not entries then continue end
 
-        -- Category header
-        local hdr = vgui.Create("DLabel", scroll)
-        hdr:SetText(" " .. catName)
-        hdr:SetFont("DermaDefaultBold")
-        hdr:SetColor(Color(220, 220, 220))
-        hdr:SetBackgroundColor(Color(60, 60, 60))
-        hdr:SetPaintBackground(true)
-        hdr:SetTall(22)
-        hdr:Dock(TOP)
-        hdr:DockMargin(0, 4, 0, 2)
-        scroll:Add(hdr)
-
-        -- Icon grid using DIconLayout
-        local grid = vgui.Create("DIconLayout", scroll)
-        grid:SetSpaceX(4)
-        grid:SetSpaceY(4)
-        grid:DockMargin(4, 0, 4, 4)
-        grid:Dock(TOP)
+        local col = pnl:Add("ContentContainer")
+        col:SetLabel(catName)
 
         for _, e in ipairs(entries) do
-            local btn = vgui.Create("ContentIcon", grid)
-            btn:SetContentType("entity")
-            btn:SetName(e.name)
-            btn:SetMaterial(GetIcon(e.class))
-            btn:SetToolTip(e.name .. "\nClass: " .. e.class)
-            btn:SetSize(64, 64)
+            local ic = vgui.Create("ContentIcon")
+            ic:SetContentType("entity")
+            ic:SetName(e.name)
+            ic:SetMaterial(GetIcon(e.class))
+            ic:SetToolTip(e.name .. "\n" .. e.class)
 
-            btn.DoClick = function()
+            ic.DoClick = function()
                 RunConsoleCommand("gredauto_spawn", e.class)
             end
 
-            btn.DoRightClick = function()
-                local menu = DermaMenu()
-                menu:AddOption("Copy class: " .. e.class, function()
-                    SetClipboardText(e.class)
-                end)
-                menu:Open()
+            ic.DoRightClick = function()
+                local m = DermaMenu()
+                m:AddOption("Copy class", function() SetClipboardText(e.class) end)
+                m:Open()
             end
 
-            grid:Add(btn)
+            col:Add(ic)
         end
-
-        -- Let DIconLayout size itself to content
-        grid:SizeToContents()
-        scroll:Add(grid)
     end
 
-    return scroll
-end, "icon16/gun.png", 9999)
+    return pnl
+end
+
+spawnmenu.AddCreationTab("Auto Emplacements", BuildPanel, "icon16/gun.png", 9999)
