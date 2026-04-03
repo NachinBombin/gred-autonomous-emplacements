@@ -1,0 +1,10 @@
+"AddonInfo"
+{
+	"name"		"Gredwitch Autonomous Emplacements"
+	"version"	"1"
+	"up_date"	"Apr 2026"
+	"author_name"	"NachinBombin"
+	"author_email"	""
+	"info"		"Ghost-soldier autonomous emplacement controller"
+	"override"	"0"
+}
